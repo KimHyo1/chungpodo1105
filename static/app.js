@@ -56,14 +56,18 @@ document.querySelector("#retry-button").addEventListener("click", () => {
   if (lastRequest.value) analyze(lastRequest.value);
 });
 
-document.querySelector("#approve-button").addEventListener("click", () => {
-  showFinalPlan(document.querySelector("#recommended-action").textContent, "추천을 검토하고 승인했어요.");
+document.querySelector("#approve-button").addEventListener("click", async () => {
+  try {
+    await approvePlan(document.querySelector("#recommended-action").textContent);
+  } catch (error) {
+    document.querySelector("#final-plan-status").textContent = error.message;
+  }
 });
 
 document.querySelector("#edit-button").addEventListener("click", openEditForm);
 document.querySelector("#final-edit").addEventListener("click", openEditForm);
 document.querySelector("#cancel-edit").addEventListener("click", closeEditForm);
-document.querySelector("#save-edit").addEventListener("click", () => {
+document.querySelector("#save-edit").addEventListener("click", async () => {
   const editedAction = document.querySelector("#edited-action").value.trim();
   if (!editedAction) {
     document.querySelector("#edited-action").setAttribute("aria-invalid", "true");
@@ -71,7 +75,11 @@ document.querySelector("#save-edit").addEventListener("click", () => {
     return;
   }
   document.querySelector("#edited-action").removeAttribute("aria-invalid");
-  showFinalPlan(editedAction, "농가 상황에 맞게 수정한 계획이에요.");
+  try {
+    await approvePlan(editedAction, "농가 상황에 맞게 수정한 계획이에요.");
+  } catch (error) {
+    document.querySelector("#final-plan-status").textContent = error.message;
+  }
 });
 
 function getValidatedRequest() {
@@ -303,6 +311,24 @@ function openEditForm() {
 
 function closeEditForm() {
   document.querySelector("#edit-form").hidden = true;
+}
+
+async function approvePlan(action, status = "추천을 검토하고 승인했어요.") {
+  const response = await fetch("/api/plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      requiresApproval: true,
+      summary: document.querySelector("#recommendation-summary").textContent,
+      recommendedAction: action,
+      recommendedChannel: document.querySelector("#recommended-channel").textContent,
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.error || "출하 계획 승인에 실패했어요.");
+  }
+  showFinalPlan(result.plan.action, status);
 }
 
 function showFinalPlan(action, status) {
