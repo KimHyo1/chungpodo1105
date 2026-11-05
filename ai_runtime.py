@@ -64,6 +64,7 @@ async def _copilot_prompt(prompt: str) -> str:
 async def _framework_plan(prompt: str) -> dict[str, Any]:
     try:
         from agent_framework import Agent
+        from agent_framework.exceptions import ChatClientException
         from agent_framework.openai import OpenAIChatClient
     except ImportError as exc:
         raise AiRuntimeError("agent-framework가 설치되지 않았습니다.") from exc
@@ -71,15 +72,20 @@ async def _framework_plan(prompt: str) -> dict[str, Any]:
     model = os.getenv("OPENAI_CHAT_MODEL") or os.getenv("OPENAI_MODEL") or os.getenv(
         "COPILOT_MODEL", "gpt-5"
     )
-    async with Agent(
-        client=OpenAIChatClient(model=model),
-        instructions=(
-            "You are the shipment planner stage. Return only valid JSON with "
-            "summary, recommendedAction, recommendedChannel, reasons, confidence, "
-            "warnings, and requiresApproval."
-        ),
-    ) as agent:
-        result = await agent.run(prompt)
+    try:
+        async with Agent(
+            client=OpenAIChatClient(model=model),
+            instructions=(
+                "You are the shipment planner stage. Return only valid JSON with "
+                "summary, recommendedAction, recommendedChannel, reasons, confidence, "
+                "warnings, and requiresApproval."
+            ),
+        ) as agent:
+            result = await agent.run(prompt)
+    except ChatClientException as exc:
+        raise AiRuntimeError(
+            "출하 전략 AI 인증에 실패했습니다. OPENAI_API_KEY가 유효한지 확인해 주세요."
+        ) from exc
     return _parse_json_response(_text_from_response(result), "출하 전략 생성")
 
 
