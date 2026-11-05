@@ -8,7 +8,7 @@ MVP는 `POST /api/analyze` 하나의 완료된 사용자 흐름을 제공한다.
 
 - `app.py`와 `static/index.html`에 로그인 없는 웹 UI, 분석 API, 입력 검증, 결과·승인 흐름, 데모 에이전트가 구현되어 있다.
 - 현재 서버는 외부 AI 자격 증명 없이 E2E를 검증할 수 있는 `runtime: demo` 모드로 동작한다.
-- `AI_RUNTIME=live`로 실행하면 `ai_runtime.py`가 Copilot SDK 세션과 Agent Framework `Agent.run`을 사용한다. 라이브 모드는 패키지와 모델 인증이 준비된 환경에서만 활성화한다.
+- `AI_RUNTIME=live`로 실행하면 `ai_runtime.py`가 Copilot SDK 세션과 Agent Framework `Agent.run`을 사용한다. 출하 전략 단계는 Azure OpenAI와 `DefaultAzureCredential`을 사용하며, Azure Container Apps Managed Identity로 인증한다.
 - 의존성은 `requirements.txt`에 고정했으며, 현재 검증 환경에서는 패키지 설치가 완료되지 않아 라이브 모드는 실행 검증 전이다.
 - 데모 모드는 실제 AI 연동을 대체한 것으로 표시하지 않으며, 외부 데이터가 아닌 데모 데이터임을 UI에 표시한다.
 
@@ -109,6 +109,8 @@ Agent Orchestrator
 
 분석 요청을 받고 ShipmentPlanner 단계의 실행과 입력 컨텍스트를 관리한다. `ai_runtime.py`의 `Agent.run` 결과가 누락되거나 JSON 검증에 실패하면 최종 추천을 생성하지 않고 오류 상태를 반환한다.
 
+출하 전략 모델은 `OpenAIChatCompletionClient`의 Azure OpenAI 경로를 사용한다. 필요한 설정은 `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL`, 선택적 `AZURE_OPENAI_API_VERSION`이며, API 키 대신 Container Apps Managed Identity의 Entra 토큰을 사용한다.
+
 ### MVP 에이전트
 
 #### CropRiskAgent
@@ -172,7 +174,8 @@ Orchestrator
 ## 7. Azure 배포 및 운영
 
 - Azure Container Apps에 배포
-- Copilot SDK 관련 비밀키는 Azure 환경변수로 관리
+- Copilot SDK 서버 인증 토큰은 Azure Container Apps Secret으로 관리한다.
+- Azure OpenAI는 Container Apps 시스템 할당 Managed Identity와 RBAC로 인증하며 API 키를 사용하지 않는다.
 - `.env`와 비밀키를 저장소에 커밋하지 않음
 - 공개 Azure 기본 도메인으로 제출
 - 애플리케이션 오류와 분석 요청 실패를 로그로 확인

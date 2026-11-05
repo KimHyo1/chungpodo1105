@@ -65,16 +65,30 @@ async def _framework_plan(prompt: str) -> dict[str, Any]:
     try:
         from agent_framework import Agent
         from agent_framework.exceptions import ChatClientException
-        from agent_framework.openai import OpenAIChatClient
+        from agent_framework.openai import OpenAIChatCompletionClient
+        from azure.identity import DefaultAzureCredential
     except ImportError as exc:
-        raise AiRuntimeError("agent-framework가 설치되지 않았습니다.") from exc
+        raise AiRuntimeError(
+            "Azure OpenAI 런타임 의존성이 설치되지 않았습니다. "
+            "requirements.txt를 설치해 주세요."
+        ) from exc
 
-    model = os.getenv("OPENAI_CHAT_MODEL") or os.getenv("OPENAI_MODEL") or os.getenv(
-        "COPILOT_MODEL", "gpt-5"
-    )
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    model = os.getenv("AZURE_OPENAI_CHAT_COMPLETION_MODEL") or os.getenv("AZURE_OPENAI_MODEL")
+    if not endpoint or not model:
+        raise AiRuntimeError(
+            "Azure OpenAI 설정이 부족합니다. "
+            "AZURE_OPENAI_ENDPOINT와 AZURE_OPENAI_MODEL을 설정해 주세요."
+        )
     try:
+        client = OpenAIChatCompletionClient(
+            model=model,
+            azure_endpoint=endpoint,
+            credential=DefaultAzureCredential(),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
+        )
         async with Agent(
-            client=OpenAIChatClient(model=model),
+            client=client,
             instructions=(
                 "You are the shipment planner stage. Return only valid JSON with "
                 "summary, recommendedAction, recommendedChannel, reasons, confidence, "
@@ -84,7 +98,8 @@ async def _framework_plan(prompt: str) -> dict[str, Any]:
             result = await agent.run(prompt)
     except ChatClientException as exc:
         raise AiRuntimeError(
-            "출하 전략 AI 인증에 실패했습니다. OPENAI_API_KEY가 유효한지 확인해 주세요."
+            "Azure OpenAI 인증 또는 호출에 실패했습니다. "
+            "Container Apps Managed Identity와 Azure OpenAI 권한을 확인해 주세요."
         ) from exc
     return _parse_json_response(_text_from_response(result), "출하 전략 생성")
 
