@@ -68,8 +68,11 @@ async def _framework_plan(prompt: str) -> dict[str, Any]:
     except ImportError as exc:
         raise AiRuntimeError("agent-framework가 설치되지 않았습니다.") from exc
 
+    model = os.getenv("OPENAI_CHAT_MODEL") or os.getenv("OPENAI_MODEL") or os.getenv(
+        "COPILOT_MODEL", "gpt-5"
+    )
     async with Agent(
-        client=OpenAIChatClient(),
+        client=OpenAIChatClient(model=model),
         instructions=(
             "You are the shipment planner stage. Return only valid JSON with "
             "summary, recommendedAction, recommendedChannel, reasons, confidence, "
