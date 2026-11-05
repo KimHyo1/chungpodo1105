@@ -12,6 +12,10 @@ from ai_runtime import AiRuntimeError, analyze_with_ai
 
 ROOT = Path(__file__).parent
 STATIC = ROOT / "static"
+STATIC_ASSETS = {
+    "app.js": "text/javascript; charset=utf-8",
+    "styles.css": "text/css; charset=utf-8",
+}
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 LOGGER = logging.getLogger("cheongdo-farm")
 
@@ -168,6 +172,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return
+        asset_name = path.lstrip("/")
+        content_type = STATIC_ASSETS.get(asset_name)
+        if content_type:
+            content = (STATIC / asset_name).read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-cache")
             self.end_headers()
             self.wfile.write(content)
             return
