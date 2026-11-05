@@ -16,6 +16,7 @@
 - `CropRiskAgent`와 `ShipmentPlannerAgent` 구현
 - `getCropRiskData` 및 `getMarketSnapshot` 도구 구현
 - `POST /api/analyze` 구현
+- `GET /api/demo-data` 및 `POST /api/plan` 구현
 - 데모 농업·시장 데이터 구성
 - 구조화 응답 검증과 오류 처리
 - Azure 배포, 환경변수, 로그 확인

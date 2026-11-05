@@ -11,6 +11,12 @@ MVP는 `POST /api/analyze` 하나의 완료된 사용자 흐름을 제공한다.
 - 심사 제출 전에는 데모 에이전트 구현을 Copilot SDK 모델 세션과 Microsoft Agent Framework 실행 흐름으로 교체하고, 동일한 응답 스키마로 재검증해야 한다.
 - 데모 모드는 실제 AI 연동을 대체한 것으로 표시하지 않으며, 외부 데이터가 아닌 데모 데이터임을 UI에 표시한다.
 
+## 0.1 현재 구현 상태
+
+- `app.py`와 `static/index.html`에 로그인 없는 웹 UI, 분석 API, 입력 검증, 결과·승인 흐름, 데모 에이전트가 구현되어 있다.
+- 현재 서버는 외부 AI 자격 증명 없이 E2E를 검증할 수 있는 `runtime: demo` 모드로 동작한다.
+- 심사 제출 전에는 데모 에이전트 구현을 Copilot SDK 모델 세션과 Microsoft Agent Framework 실행 흐름으로 교체하고, 동일한 응답 스키마로 재검증해야 한다.
+
 ## 1. 기술 목표
 
 - 공개 Azure URL에서 로그인 없이 핵심 기능 제공
@@ -82,6 +88,14 @@ Agent Orchestrator
   "requiresApproval": true
 }
 ```
+
+### `GET /api/demo-data`
+
+대표 작물, 데모 시장 데이터 기준일, 데이터 출처를 반환한다. 실제 농가 개인정보나 실시간 가격을 반환하지 않는다.
+
+### `POST /api/plan`
+
+분석 결과의 `requiresApproval: true`를 확인한 뒤 사용자가 승인한 출하 계획을 반환한다. 실제 주문·출하 API를 호출하지 않는다.
 
 ## 4. 에이전트 설계
 
@@ -157,6 +171,7 @@ Orchestrator
 - 데이터 부족: `warnings`에 데이터 부족 사유 표시
 - 스키마 검증 실패: 결과를 성공으로 표시하지 않고 오류 로그 기록
 - 신뢰도는 통계적 확률로 표현하지 않고 데이터 품질과 입력 완성도에 따른 수준·근거로 표시
+- 승인 요청은 서버에서 `requiresApproval: true`를 확인하고, 실제 외부 주문 작업은 수행하지 않는다.
 
 ## 7. Azure 배포 및 운영
 

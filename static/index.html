@@ -75,18 +75,27 @@
       if (!response.ok) throw new Error(data.error || "분석에 실패했습니다.");
       document.querySelector("#summary").textContent = data.summary;
       document.querySelector("#risk").textContent = `위험 수준: ${data.riskLevel}`;
+      document.querySelector("#risk").dataset.action = data.recommendedAction;
       document.querySelector("#channel").textContent = `추천 채널: ${data.recommendedChannel}`;
-      document.querySelector("#reasons").innerHTML = data.reasons.map((item) => `<li>${item}</li>`).join("");
+      const reasons = document.querySelector("#reasons"); reasons.replaceChildren(...data.reasons.map((item) => { const li = document.createElement("li"); li.textContent = item; return li; }));
       document.querySelector("#confidence").textContent = `신뢰도: ${data.confidence.level} (${data.confidence.reasons.join(", ")})`;
       document.querySelector("#data-date").textContent = `데이터 기준일: ${data.dataDate}`;
-      document.querySelector("#warnings").innerHTML = data.warnings.map((item) => `<p class="warning">${item}</p>`).join("");
+      const warnings = document.querySelector("#warnings"); warnings.replaceChildren(...data.warnings.map((item) => { const p = document.createElement("p"); p.className = "warning"; p.textContent = item; return p; }));
       document.querySelector("#runtime").textContent = data.runtime === "demo" ? "· 데모 데이터" : "";
       setHidden(status, true); setHidden(resultPanel, false);
     } catch (e) { setHidden(status, true); error.textContent = e.message; setHidden(error, false); }
     finally { button.disabled = false; }
   });
-  document.querySelector("#approve").addEventListener("click", () => {
-    const approved = document.querySelector("#approved"); approved.textContent = "출하 계획이 승인되었습니다. 실제 주문이나 출하는 실행되지 않습니다."; setHidden(approved, false);
+  document.querySelector("#approve").addEventListener("click", async () => {
+    const approved = document.querySelector("#approved");
+    const summary = document.querySelector("#summary").textContent;
+    const action = document.querySelector("#risk").dataset.action || document.querySelector("#summary").textContent;
+    const channel = document.querySelector("#channel").textContent.replace("추천 채널: ", "");
+    try {
+      const response = await fetch("/api/plan", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ requiresApproval: true, summary, recommendedAction: action, recommendedChannel: channel }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || "승인에 실패했습니다.");
+      approved.textContent = `${data.notice} 승인일: ${data.approvedAt}`; setHidden(approved, false);
+    } catch (e) { approved.textContent = e.message; setHidden(approved, false); }
   });
   document.querySelector("#edit").addEventListener("click", () => { setHidden(resultPanel, true); form.elements.condition.focus(); });
 </script>

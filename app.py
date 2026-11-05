@@ -33,6 +33,7 @@ def get_market_snapshot(crop: str, harvest_date: str, quantity: int) -> dict[str
         "recommendedChannel": "지역 직거래 및 로컬푸드 매장",
         "dataDate": date.today().isoformat(),
         "isDemoData": True,
+        "source": "청도팜 데모 시장 데이터",
     }
 
 
@@ -74,6 +75,12 @@ class AgentOrchestrator:
         LOGGER.info("analysis started crop=%s", payload["crop"])
         risk = CropRiskAgent().run(payload)
         result = ShipmentPlannerAgent().run(payload, risk)
+        result["steps"] = [
+            {"id": "validating", "label": "입력 검증", "status": "completed"},
+            {"id": "crop-risk", "label": "작물 위험 분석", "status": "completed"},
+            {"id": "market-snapshot", "label": "시장 데이터 조회", "status": "completed"},
+            {"id": "shipment-plan", "label": "출하 전략 생성", "status": "completed"},
+        ]
         LOGGER.info("analysis completed risk=%s", result["riskLevel"])
         return result
 
@@ -91,11 +98,34 @@ def validate_payload(payload: Any) -> dict[str, Any]:
         raise ValueError("수량은 숫자여야 합니다.") from exc
     if quantity <= 0:
         raise ValueError("수량은 1 이상이어야 합니다.")
+    harvest_date = str(payload["harvestDate"]).strip()
+    try:
+        date.fromisoformat(harvest_date)
+    except ValueError as exc:
+        raise ValueError("출하 예정일은 YYYY-MM-DD 형식이어야 합니다.") from exc
     return {
         "crop": str(payload["crop"]).strip()[:80],
         "quantity": quantity,
-        "harvestDate": str(payload["harvestDate"]).strip()[:20],
+        "harvestDate": harvest_date,
         "condition": str(payload["condition"]).strip()[:500],
+    }
+
+
+def create_approved_plan(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict) or payload.get("requiresApproval") is not True:
+        raise ValueError("승인 가능한 분석 결과가 아닙니다.")
+    required = ("summary", "recommendedAction", "recommendedChannel")
+    if any(not str(payload.get(field, "")).strip() for field in required):
+        raise ValueError("승인할 출하 계획 정보가 부족합니다.")
+    return {
+        "status": "approved",
+        "approvedAt": date.today().isoformat(),
+        "plan": {
+            "summary": str(payload.get("summary", "")),
+            "action": str(payload.get("recommendedAction", "")),
+            "channel": str(payload.get("recommendedChannel", "")),
+        },
+        "notice": "출하 계획만 승인되었으며 실제 주문이나 출하는 실행되지 않았습니다.",
     }
 
 
@@ -114,6 +144,17 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok"})
             return
+        if path == "/api/demo-data":
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "crops": ["복숭아", "청도반시"],
+                    "marketDataDate": date.today().isoformat(),
+                    "source": "청도팜 데모 시장 데이터",
+                    "isDemoData": True,
+                },
+            )
+            return
         if path in ("/", "/index.html"):
             content = (STATIC / "index.html").read_bytes()
             self.send_response(HTTPStatus.OK)
@@ -125,13 +166,18 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "페이지를 찾을 수 없습니다."})
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/api/analyze":
+        path = urlparse(self.path).path
+        if path not in ("/api/analyze", "/api/plan"):
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "API를 찾을 수 없습니다."})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            payload = validate_payload(json.loads(self.rfile.read(length)))
-            result = AgentOrchestrator().analyze(payload)
+            body = json.loads(self.rfile.read(length))
+            if path == "/api/analyze":
+                payload = validate_payload(body)
+                result = AgentOrchestrator().analyze(payload)
+            else:
+                result = create_approved_plan(body)
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc), "retryable": False})
             return
