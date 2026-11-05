@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ai_runtime import AiRuntimeError, analyze_with_ai
+from photo_analysis import MAX_PHOTO_REQUEST_BYTES, PhotoAnalysisError, analyze_photo, validate_photo_request
 
 ROOT = Path(__file__).parent
 STATIC = ROOT / "static"
@@ -78,14 +79,15 @@ class ShipmentPlannerAgent:
 class AgentOrchestrator:
     def analyze(self, payload: dict[str, Any]) -> dict[str, Any]:
         LOGGER.info("analysis started crop=%s", payload["crop"])
-        risk = CropRiskAgent().run(payload)
         if os.getenv("AI_RUNTIME", "demo").lower() == "live":
             try:
-                result = analyze_with_ai(payload, risk)
+                market = get_market_snapshot(payload["crop"], payload["harvestDate"], payload["quantity"])
+                result = analyze_with_ai(payload, market)
             except AiRuntimeError:
                 LOGGER.exception("live AI runtime failed")
                 raise
         else:
+            risk = CropRiskAgent().run(payload)
             result = ShipmentPlannerAgent().run(payload, risk)
         result["steps"] = [
             {"id": "validating", "label": "입력 검증", "status": "completed"},
@@ -190,15 +192,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in ("/api/analyze", "/api/plan"):
+        if path not in ("/api/analyze", "/api/plan", "/api/photo-analyze"):
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "API를 찾을 수 없습니다."})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if path == "/api/photo-analyze" and (length <= 0 or length > MAX_PHOTO_REQUEST_BYTES):
+                self._send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "사진 요청 크기가 너무 큽니다.", "retryable": False})
+                return
             body = json.loads(self.rfile.read(length))
             if path == "/api/analyze":
                 payload = validate_payload(body)
                 result = AgentOrchestrator().analyze(payload)
+            elif path == "/api/photo-analyze":
+                payload = validate_photo_request(body)
+                result = analyze_photo(payload)
             else:
                 result = create_approved_plan(body)
         except AiRuntimeError as exc:
@@ -210,7 +218,18 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc), "retryable": False})
             return
-        except Exception:
+        except PhotoAnalysisError as exc:
+            LOGGER.error("photo analysis failed: %s", exc)
+            self._send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": str(exc), "retryable": True})
+            return
+        except Exception as exc:
+            if path == "/api/photo-analyze":
+                LOGGER.error("photo analysis failed: %s", type(exc).__name__)
+                self._send_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {"error": "사진 분석에 실패했어요. 연결 설정을 확인하거나 직접 입력해 주세요.", "retryable": True},
+                )
+                return
             LOGGER.exception("analysis failed")
             self._send_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,

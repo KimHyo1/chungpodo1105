@@ -96,6 +96,55 @@ Azure 증빙은 모든 팀원이 각자의 초대 링크로 팀 구성을 확인
 
 등록·제출 이슈는 자동 처리 후 닫힐 수 있습니다. 닫힘 여부만으로 성공을 판단하지 말고, **이슈 댓글과 `complete`·`invalid` 라벨**을 확인해 주세요. 오류가 발생하면 댓글의 안내에 따라 조치하고, 해결되지 않으면 운영진에게 문의해 주세요.
 
+## 청도팜 사진 분석 실행
+
+사진 촬영·미리보기와 직접 입력은 별도 인증 없이 사용할 수 있습니다. **실제 사진 분석**은 Copilot SDK 런타임, Copilot 인증 및 이미지 입력을 지원하는 모델 설정이 필요하며 기본적으로 비활성화되어 있습니다. PowerShell에서 다음을 준비한 뒤 서버를 실행합니다.
+
+```powershell
+python -m pip install -r requirements.txt
+python -m copilot download-runtime
+$env:COPILOT_SKIP_CLI_DOWNLOAD = "1"
+$env:PHOTO_ANALYSIS_ENABLED = "true"
+$env:COPILOT_VISION_MODEL = "이미지 입력을 지원하고 사용 권한이 있는 모델명"
+python app.py
+```
+
+Copilot 인증은 [Copilot SDK 백엔드 설정 문서](https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services)와 배포 환경의 비밀 설정을 참고하세요. 사진은 사용자의 동의를 받은 후 모델 서비스로 전송됩니다. 앱은 분석 종료 시 SDK 세션 삭제를 시도하지만 비정상 종료나 삭제 실패에 대비한 운영상 정리와 서비스 측 보관 정책 확인이 필요합니다.
+
+## Azure Container Apps 배포 준비
+
+현재 구성은 공개 웹 서버, Copilot SDK 작물·사진 분석, Microsoft Agent Framework와 Azure OpenAI 출하 전략을 연결합니다. `AI_RUNTIME=live`에서도 **시장 데이터는 데모 데이터**이며 실시간 시세가 아닙니다. 실제 AI 호출은 아래 인증과 모델 설정을 완료한 뒤 별도 검증해야 합니다. `/health`는 서버 생존 확인만 하므로 AI 인증 성공을 의미하지 않습니다.
+
+1. Azure 구독에 Container Apps 환경, Azure Container Registry(ACR), Azure OpenAI 리소스와 Chat Completions를 지원하는 모델 배포를 준비합니다. Entra 인증을 사용할 수 있는 Azure OpenAI 엔드포인트와 **모델 이름이 아닌 배포 이름**을 확인합니다. [Azure OpenAI Managed Identity 안내](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity)를 참고하세요.
+2. Azure CLI 로그인 후 저장소 루트에서 ACR 클라우드 빌드를 실행합니다. Docker가 로컬에 없어도 사용할 수 있지만 빌드 컨텍스트가 ACR에 전송됩니다. 아래 이름은 실제 리소스 이름으로 바꾸세요.
+
+   ```powershell
+   az login
+   az account set --subscription "<구독 ID>"
+   az acr build --registry "<ACR 이름>" --image "cheongdopam:v1" .
+   ```
+
+   이미지 빌드 중 Copilot SDK 런타임을 다운로드하므로 빌드 환경의 외부 네트워크 접근이 필요합니다. 런타임 다운로드나 이미지 빌드 실패는 배포 성공이 아닙니다.
+3. Azure Portal에서 해당 ACR 이미지를 사용하는 Container App을 생성하고 외부 ingress를 켜서 대상 포트를 `8080`으로 지정합니다. ACR 이미지 가져오기 권한도 설정합니다. 제출에는 앱의 기본 `*.azurecontainerapps.io` 주소를 사용합니다.
+4. Container App의 시스템 할당 Managed Identity를 활성화합니다. Azure OpenAI 리소스의 액세스 제어(IAM)에서 이 ID에 **Cognitive Services OpenAI User** 역할을 부여하고 권한 적용을 기다립니다. 앱에서 Azure OpenAI API 키는 사용하지 않습니다.
+5. Copilot SDK 서버 인증을 준비합니다. 서버 사용에 적합한 유효한 GitHub Copilot 인증 수단, 라이선스·정책, 텍스트 및 이미지 모델 접근 권한을 확인하세요. Portal의 Container App **Secrets**에 토큰을 안전하게 등록하고 환경 변수 `COPILOT_GITHUB_TOKEN`을 해당 비밀에 연결합니다. 토큰은 저장소, 이미지, 제출 이슈, 채팅 또는 로그에 넣지 마세요. 자세한 내용은 [Copilot SDK 인증](https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/authenticate)을 참고하세요. [GitHub App 설치 토큰](https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/server-to-server-tokens)은 조직 정책과 SDK 명시적 토큰 전달이 필요하며 1시간 후 만료됩니다. 이 저장소에는 해당 인증 방식의 명시적 전달 및 자동 발급·갱신이 구현되어 있지 않습니다.
+6. Container App 환경 변수를 설정하고 새 리비전을 적용합니다.
+
+   | 이름 | 값 |
+   |---|---|
+   | `AI_RUNTIME` | `live` |
+   | `PHOTO_ANALYSIS_ENABLED` | `true` |
+   | `AZURE_OPENAI_ENDPOINT` | Azure OpenAI 리소스 엔드포인트 |
+   | `AZURE_OPENAI_MODEL` | Azure OpenAI 모델 배포 이름 |
+   | `COPILOT_GITHUB_TOKEN` | 위에서 등록한 Container App 비밀 참조 |
+   | `COPILOT_MODEL` | 접근 가능한 텍스트 모델. 생략 시 `gpt-5` |
+   | `COPILOT_VISION_MODEL` | 이미지 입력을 지원하고 접근 가능한 모델. 생략 시 `gpt-5` |
+
+   필요할 때 `AZURE_OPENAI_API_VERSION`을 지정합니다. `PORT=8080`, `COPILOT_SKIP_CLI_DOWNLOAD=1`은 이미지에 설정되어 있습니다. 로컬 로그인 자격 증명과 Azure Managed Identity는 서로 다릅니다.
+7. 공개 URL에서 화면과 `/health`를 확인한 후 실제 출하 분석에서 네 단계, 위험도·기준일·데모 데이터 경고를 확인하고 승인까지 진행합니다. 동의 후 라벨과 작물 사진을 각각 시험해 인식된 정보와 직접 수정이 가능한지 확인합니다. 사진에 없는 출하 수량·날짜는 추측하지 않는지 확인하세요. 실패 시 Container App 로그와 인증·모델 권한을 확인하며, 503 또는 502를 성공으로 간주하지 않습니다.
+
+공개 엔드포인트는 누구나 모델 호출을 유발할 수 있으므로 행사 운영 전에 사용량·비용 한도, 요청 제한 및 이상 사용 모니터링을 별도로 준비하세요. 사진과 입력 내용은 모델 서비스에 전달되며, SDK 세션 삭제 실패나 비정상 종료에 대비한 데이터 보관 정책도 확인해야 합니다.
+
 ## 참가 등록 및 현황
 
 - 참가자 핸들 등록, 팀 등록, 앱 결과 제출은 [양식 선택 페이지](https://github.com/hackersground-kr/hackathon-cheongdo/issues/new/choose)에서 진행합니다.
