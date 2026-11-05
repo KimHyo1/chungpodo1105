@@ -11,12 +11,33 @@ class AiRuntimeError(RuntimeError):
 def _text_from_response(response: Any) -> str:
     if response is None:
         raise AiRuntimeError("AI 응답이 비어 있습니다.")
-    content = getattr(response, "content", response)
+    content = getattr(response, "content", None)
+    if content is None:
+        data = getattr(response, "data", None)
+        content = getattr(data, "content", data)
+    if content is None:
+        content = response
     if isinstance(content, str):
         return content
     if isinstance(content, list):
         return "".join(str(getattr(item, "text", item)) for item in content)
     return str(content)
+
+
+def _parse_json_response(text: str, stage: str) -> dict[str, Any]:
+    cleaned = text.strip()
+    if not cleaned:
+        raise AiRuntimeError(f"{stage} AI 응답이 비어 있습니다. Copilot 인증과 모델 응답을 확인해 주세요.")
+    try:
+        result = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        preview = " ".join(cleaned.split())[:160]
+        raise AiRuntimeError(
+            f"{stage} AI 응답이 JSON 형식이 아닙니다. 응답 일부: {preview}"
+        ) from exc
+    if not isinstance(result, dict):
+        raise AiRuntimeError(f"{stage} AI 응답은 JSON 객체여야 합니다.")
+    return result
 
 
 async def _copilot_prompt(prompt: str) -> str:
@@ -56,10 +77,7 @@ async def _framework_plan(prompt: str) -> dict[str, Any]:
         ),
     ) as agent:
         result = await agent.run(prompt)
-    try:
-        return json.loads(_text_from_response(result))
-    except json.JSONDecodeError as exc:
-        raise AiRuntimeError("Agent Framework 결과가 JSON이 아닙니다.") from exc
+    return _parse_json_response(_text_from_response(result), "출하 전략 생성")
 
 
 def analyze_with_ai(payload: dict[str, Any], crop_risk: dict[str, Any]) -> dict[str, Any]:
@@ -70,7 +88,10 @@ def analyze_with_ai(payload: dict[str, Any], crop_risk: dict[str, Any]) -> dict[
         },
         ensure_ascii=False,
     )
-    live_crop_risk = json.loads(asyncio.run(_copilot_prompt(risk_prompt)))
+    live_crop_risk = _parse_json_response(
+        asyncio.run(_copilot_prompt(risk_prompt)),
+        "작물 위험 분석",
+    )
     plan_prompt = json.dumps(
         {"request": payload, "cropRisk": live_crop_risk},
         ensure_ascii=False,
