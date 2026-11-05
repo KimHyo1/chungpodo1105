@@ -61,3 +61,10 @@
 - `PRD.md`와 `TRD.md`가 저장소 루트에 존재
 - 최종 커밋 해시가 실제 배포 버전과 일치
 - 제출 URL이 로그인 없이 접근 가능
+
+## 7. 현재 구현 검증
+
+- `python -m py_compile app.py` 통과
+- `GET /health`가 `{"status":"ok"}`를 반환
+- 대표 입력으로 `POST /api/analyze`가 추천·근거·신뢰도·기준일·주의사항을 반환
+- 현재 응답의 `runtime`은 `demo`이며, 실제 SDK 연동 후 `runtime` 표시와 결과 스키마를 다시 검증한다.

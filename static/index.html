@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>청도팜 세일즈 코파일럿</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #173328; background: #f3f7f1; }
+    body { margin: 0; } main { max-width: 860px; margin: auto; padding: 32px 18px 64px; }
+    .hero, .panel { background: white; border: 1px solid #dce8dc; border-radius: 18px; padding: 24px; box-shadow: 0 8px 24px #214c2510; }
+    .hero { background: #e5f3e5; margin-bottom: 18px; } h1 { margin-top: 0; } h2 { font-size: 1.15rem; }
+    form { display: grid; gap: 14px; } label { display: grid; gap: 6px; font-weight: 700; }
+    input, textarea, button { font: inherit; border-radius: 10px; padding: 11px; border: 1px solid #b9cbb9; }
+    textarea { min-height: 90px; resize: vertical; } button { cursor: pointer; border: 0; background: #26734d; color: white; font-weight: 700; }
+    button.secondary { background: #e3ece4; color: #173328; } button:disabled { opacity: .6; cursor: wait; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; } .hidden { display: none; }
+    .status { margin: 16px 0; padding: 12px; background: #f0f6f0; border-radius: 10px; }
+    .result { border-left: 5px solid #26734d; padding-left: 14px; } li { margin: 6px 0; }
+    .warning { color: #825b00; background: #fff7da; padding: 10px; border-radius: 8px; }
+    @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } main { padding: 18px 12px 40px; } }
+  </style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <p>청도군 농산물 출하 의사결정 지원</p>
+    <h1>청도팜 세일즈 코파일럿</h1>
+    <p>작물 상태와 출하 조건을 분석해 출하 전략을 제안합니다. AI 추천은 참고용이며 최종 결정은 사용자에게 있습니다.</p>
+  </section>
+  <section class="panel">
+    <h2>농산물 정보 입력</h2>
+    <form id="analysis-form">
+      <div class="grid">
+        <label>작물명<input name="crop" value="복숭아" required maxlength="80"></label>
+        <label>수량(kg)<input name="quantity" type="number" value="300" min="1" required></label>
+        <label>출하 예정일<input name="harvestDate" type="date" required></label>
+      </div>
+      <label>작물 상태<textarea name="condition" required maxlength="500">일부 과실의 착색이 빠름</textarea></label>
+      <button id="analyze" type="submit">AI 출하 분석 시작</button>
+    </form>
+    <div id="status" class="status hidden" aria-live="polite"></div>
+    <p id="error" class="warning hidden" role="alert"></p>
+  </section>
+  <section id="result-panel" class="panel hidden" aria-live="polite">
+    <div class="result">
+      <p><strong>분석 결과</strong> <span id="runtime"></span></p>
+      <h2 id="summary"></h2>
+      <p id="risk"></p><p id="channel"></p>
+      <h3>추천 근거</h3><ul id="reasons"></ul>
+      <p id="confidence"></p><p id="data-date"></p>
+      <div id="warnings"></div>
+      <button id="approve" type="button">이 추천으로 출하 계획 승인</button>
+      <button id="edit" class="secondary" type="button">입력 수정</button>
+      <p id="approved" class="hidden" role="status"></p>
+    </div>
+  </section>
+</main>
+<script>
+  const form = document.querySelector("#analysis-form");
+  const status = document.querySelector("#status");
+  const error = document.querySelector("#error");
+  const resultPanel = document.querySelector("#result-panel");
+  const dateInput = form.elements.harvestDate;
+  dateInput.value = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+  const setHidden = (element, hidden) => element.classList.toggle("hidden", hidden);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setHidden(error, true); setHidden(resultPanel, true); setHidden(status, false);
+    status.textContent = "✓ 입력 검증 중 → ✓ 작물 위험 분석 → ✓ 시장 데이터 조회 → 출하 전략 생성 중";
+    const button = document.querySelector("#analyze"); button.disabled = true;
+    try {
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const response = await fetch("/api/analyze", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "분석에 실패했습니다.");
+      document.querySelector("#summary").textContent = data.summary;
+      document.querySelector("#risk").textContent = `위험 수준: ${data.riskLevel}`;
+      document.querySelector("#channel").textContent = `추천 채널: ${data.recommendedChannel}`;
+      document.querySelector("#reasons").innerHTML = data.reasons.map((item) => `<li>${item}</li>`).join("");
+      document.querySelector("#confidence").textContent = `신뢰도: ${data.confidence.level} (${data.confidence.reasons.join(", ")})`;
+      document.querySelector("#data-date").textContent = `데이터 기준일: ${data.dataDate}`;
+      document.querySelector("#warnings").innerHTML = data.warnings.map((item) => `<p class="warning">${item}</p>`).join("");
+      document.querySelector("#runtime").textContent = data.runtime === "demo" ? "· 데모 데이터" : "";
+      setHidden(status, true); setHidden(resultPanel, false);
+    } catch (e) { setHidden(status, true); error.textContent = e.message; setHidden(error, false); }
+    finally { button.disabled = false; }
+  });
+  document.querySelector("#approve").addEventListener("click", () => {
+    const approved = document.querySelector("#approved"); approved.textContent = "출하 계획이 승인되었습니다. 실제 주문이나 출하는 실행되지 않습니다."; setHidden(approved, false);
+  });
+  document.querySelector("#edit").addEventListener("click", () => { setHidden(resultPanel, true); form.elements.condition.focus(); });
+</script>
+</body>
+</html>

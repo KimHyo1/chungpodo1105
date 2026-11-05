@@ -4,6 +4,13 @@
 
 MVP는 `POST /api/analyze` 하나의 완료된 사용자 흐름을 제공한다. MVP에서는 두 에이전트만 실행하고, 시장 분석은 `ShipmentPlannerAgent`가 도구를 통해 수행한다. MVP 완료 후 도구와 결과 계약을 유지한 채 `MarketAgent`와 `ValidationAgent`를 독립 분리한다.
 
+## 0.1 현재 구현 상태
+
+- `app.py`와 `static/index.html`에 로그인 없는 웹 UI, 분석 API, 입력 검증, 결과·승인 흐름, 데모 에이전트가 구현되어 있다.
+- 현재 서버는 외부 AI 자격 증명 없이 E2E를 검증할 수 있는 `runtime: demo` 모드로 동작한다.
+- 심사 제출 전에는 데모 에이전트 구현을 Copilot SDK 모델 세션과 Microsoft Agent Framework 실행 흐름으로 교체하고, 동일한 응답 스키마로 재검증해야 한다.
+- 데모 모드는 실제 AI 연동을 대체한 것으로 표시하지 않으며, 외부 데이터가 아닌 데모 데이터임을 UI에 표시한다.
+
 ## 1. 기술 목표
 
 - 공개 Azure URL에서 로그인 없이 핵심 기능 제공
