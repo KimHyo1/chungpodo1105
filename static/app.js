@@ -22,6 +22,35 @@ class AnalysisRequestError extends Error {
 const today = new Date();
 document.querySelector("#today-date").textContent =
   `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
+const suggestedHarvestDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 5);
+document.querySelector("#harvest-date").value = [
+  suggestedHarvestDate.getFullYear(),
+  String(suggestedHarvestDate.getMonth() + 1).padStart(2, "0"),
+  String(suggestedHarvestDate.getDate()).padStart(2, "0"),
+].join("-");
+
+function showPage(moveFocus = false) {
+  const page = window.location.hash === "#guide" ? "guide" : "analysis";
+  document.querySelector("#analysis-view").hidden = page !== "analysis";
+  document.querySelector("#guide-view").hidden = page !== "guide";
+  document.querySelector("#current-page-label").textContent = page === "guide" ? "사용 가이드" : "출하 분석";
+  document.title = `${page === "guide" ? "사용 가이드" : "출하 분석"} | 청도팜 세일즈 코파일럿`;
+  document.querySelectorAll(".side-nav [data-page]").forEach((link) => {
+    const active = link.dataset.page === page;
+    link.classList.toggle("active", active);
+    if (active) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  if (moveFocus) {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    if (page === "guide") document.querySelector("#guide-title").focus({ preventScroll: true });
+    else document.querySelector("#input-title").focus({ preventScroll: true });
+  }
+}
+
+document.querySelector("#input-title").setAttribute("tabindex", "-1");
+window.addEventListener("hashchange", () => showPage(true));
+showPage();
 
 conditionInput.addEventListener("input", () => {
   document.querySelector("#condition-count").textContent = conditionInput.value.length;

@@ -7,7 +7,7 @@
       name="description"
       content="청도 농산물의 작물 상태와 출하 조건을 살펴보고, 근거와 함께 출하 전략을 검토하는 AI 코파일럿"
     />
-    <meta name="theme-color" content="#f6f7f1" />
+    <meta name="theme-color" content="#f8f6ef" />
     <title>청도팜 세일즈 코파일럿</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,6 +20,16 @@
   </head>
   <body>
     <svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <symbol id="persimmon" viewBox="0 0 160 160">
+        <path d="M37 67C37 45 52 35 80 36c29-1 44 9 44 31 0 29-19 53-44 53S37 96 37 67Z" fill="#e98742" stroke="none" />
+        <path d="M47 61c4-13 15-18 25-18-14 10-17 32-13 48-10-9-15-19-12-30Z" fill="#f3a45f" stroke="none" />
+        <path d="M80 36c-8-10-21-9-30-4 3 8 13 13 24 12-9 3-13 8-15 13 12 0 19-4 22-12 5 8 12 12 22 12-1-6-5-10-14-13 11 1 21-4 23-12-12-5-23-4-30 4Z" fill="#4a7446" stroke="none" />
+        <path d="M80 37c-1-8 1-13 4-17" stroke="#53623e" stroke-width="4" />
+        <path d="M58 71c3-2 7-2 10 0M92 71c3-2 7-2 10 0" stroke="#75472f" stroke-width="3" />
+        <path d="M75 82c3 3 7 3 10 0" stroke="#9e5533" stroke-width="3" />
+        <ellipse cx="57" cy="80" rx="5" ry="3" fill="#ee9c79" stroke="none" />
+        <ellipse cx="103" cy="80" rx="5" ry="3" fill="#ee9c79" stroke="none" />
+      </symbol>
       <symbol id="i-leaf" viewBox="0 0 24 24">
         <path d="M20.5 3.5C11.3 3.3 5.2 6.2 5.2 12.2c0 3.1 2.2 5.3 5.2 5.3 6.1 0 9-6.1 10.1-14Z" />
         <path d="M3.5 21c2.8-5.3 6.7-8.8 12.1-11.4" />
@@ -74,38 +84,38 @@
 
     <div class="app-shell">
       <aside class="sidebar" aria-label="주요 메뉴">
-        <a class="brand" href="#" aria-label="청도팜 홈">
-          <span class="brand-mark"><svg><use href="#i-leaf" /></svg></span>
+        <a class="brand" href="#analysis" aria-label="청도팜 출하 분석 홈">
+          <span class="brand-mark"><svg><use href="#persimmon" /></svg></span>
           <span class="brand-copy">
             <strong>청도팜</strong>
             <span>SALES COPILOT</span>
           </span>
         </a>
 
-        <div class="workspace-label">WORKSPACE</div>
+        <div class="workspace-label">청도팜 둘러보기</div>
         <nav class="side-nav">
-          <a class="nav-item active" href="#analysis" aria-current="page">
-            <svg><use href="#i-grid" /></svg>
-            <span>출하 분석</span>
-            <span class="nav-dot"></span>
-          </a>
-          <a class="nav-item" href="#market-data">
-            <svg><use href="#i-chart" /></svg>
-            <span>시장 데이터</span>
-            <span class="nav-soon">준비 중</span>
-          </a>
-          <a class="nav-item" href="#guide">
+          <a class="nav-item" href="#guide" data-page="guide" aria-label="사용 가이드">
             <svg><use href="#i-book" /></svg>
             <span>사용 가이드</span>
             <svg class="nav-arrow"><use href="#i-arrow" /></svg>
           </a>
+          <a class="nav-item active" href="#analysis" data-page="analysis" aria-current="page" aria-label="출하 분석">
+            <svg><use href="#i-grid" /></svg>
+            <span>출하 분석</span>
+            <span class="nav-dot"></span>
+          </a>
+          <div class="nav-item nav-unavailable" aria-label="시장 데이터 준비 중">
+            <svg><use href="#i-chart" /></svg>
+            <span>시장 데이터</span>
+            <span class="nav-soon">준비 중</span>
+          </div>
         </nav>
 
         <div class="sidebar-spacer"></div>
         <section class="sidebar-note" aria-label="서비스 안내">
-          <div class="note-icon"><svg><use href="#i-spark" /></svg></div>
-          <strong>농부의 판단을 돕는<br />작은 조력자</strong>
-          <p>AI 분석은 참고 정보예요.<br />최종 결정은 농부님이 내려주세요.</p>
+          <div class="note-icon"><svg><use href="#persimmon" /></svg></div>
+          <strong>청도의 좋은 결실,<br />좋은 곳으로 닿도록.</strong>
+          <p>오늘의 수확부터 내일의 출하까지<br />청도팜이 함께 고민할게요.</p>
         </section>
         <div class="sidebar-footer">
           <span class="footer-leaf"><svg><use href="#i-leaf" /></svg></span>
@@ -113,23 +123,30 @@
         </div>
       </aside>
 
-      <main class="main-content" id="analysis">
+      <main class="main-content">
         <header class="topbar">
-          <div class="breadcrumb"><span>청도팜</span><span class="crumb-slash">/</span><strong>출하 분석</strong></div>
+          <div class="breadcrumb"><span>청도팜</span><span class="crumb-slash">/</span><strong id="current-page-label">출하 분석</strong></div>
           <div class="topbar-right">
             <span class="weather-pill"><svg><use href="#i-sun" /></svg> 청도 농가를 위한 분석 도우미</span>
             <span class="avatar" aria-label="게스트 사용자">농</span>
           </div>
         </header>
 
-        <div class="content-wrap">
+        <div class="content-wrap" id="analysis-view">
           <section class="welcome-row">
-            <div>
-              <div class="eyebrow"><span class="eyebrow-line"></span> HARVEST PLANNING, MADE CLEAR</div>
-              <h1>좋은 출하, <span>함께 고민해요.</span></h1>
-              <p class="welcome-copy">작물 상태와 출하 조건을 알려주시면, 다음 결정을 위한 실마리를 찾아볼게요.</p>
+            <div class="welcome-text">
+              <div class="eyebrow"><span class="eyebrow-line"></span> 청도에서 자란 좋은 결실</div>
+              <h1>정성껏 키운 오늘,<br /><span>출하는 함께 고민해요.</span></h1>
+              <p class="welcome-copy">수확한 농산물의 상태를 알려주세요.<br class="hero-break" /> 청도팜이 알맞은 출하 계획을 함께 살펴볼게요.</p>
+              <div class="hero-tag"><span></span> 청도 농가의 든든한 출하 짝꿍</div>
             </div>
-            <div class="date-chip"><span class="date-sprout"><svg><use href="#i-leaf" /></svg></span><span><small>오늘의 기준일</small><strong id="today-date">2026년 11월 5일</strong></span></div>
+            <div class="hero-art" aria-hidden="true">
+              <div class="hero-art-ring"></div>
+              <span class="hero-art-caption">CHEONGDO<br />FARM</span>
+              <svg class="hero-persimmon"><use href="#persimmon" /></svg>
+              <span class="hero-art-label">청도의 반가운 얼굴, 반시</span>
+            </div>
+            <div class="date-chip"><span class="date-sprout"><svg><use href="#i-sun" /></svg></span><span><small>오늘</small><strong id="today-date">2026년 11월 5일</strong></span></div>
           </section>
 
           <section class="insight-strip" aria-label="분석 안내">
@@ -185,7 +202,7 @@
                   <div class="field">
                     <label for="harvest-date">출하 예정일 <span class="required-mark">*</span></label>
                     <div class="input-wrap date-wrap">
-                      <input id="harvest-date" name="harvestDate" type="date" value="2026-11-10" required />
+                      <input id="harvest-date" name="harvestDate" type="date" required aria-describedby="date-error" />
                     </div>
                     <span class="field-hint">예상 날짜로 입력해도 괜찮아요.</span>
                     <span class="field-error" id="date-error"></span>
@@ -235,7 +252,7 @@
                   </div>
                   <span class="empty-tag"><span></span> 준비됐어요</span>
                   <h3>첫 분석을 시작해 볼까요?</h3>
-                  <p>왼쪽에 작물 정보를 입력하면<br />맞춤 출하 전략을 함께 살펴볼게요.</p>
+                  <p>농산물 정보를 입력하면<br />맞춤 출하 전략을 함께 살펴볼게요.</p>
                   <div class="empty-checklist">
                     <span><i>01</i> 작물 상태 확인</span>
                     <span><i>02</i> 시장 정보 살펴보기</span>
@@ -317,12 +334,55 @@
             </section>
           </div>
 
-          <section class="bottom-note" id="guide">
+          <section class="bottom-note">
             <span class="bottom-note-icon"><svg><use href="#i-info" /></svg></span>
             <p><strong>함께 기억해 주세요</strong><span>실시간 시세가 아닌 데모 데이터를 사용할 수 있어요. 추천 근거와 데이터 기준일을 확인하고, 농가 상황에 맞게 판단해 주세요.</span></p>
             <span class="demo-label" id="demo-label">데모 데이터 안내</span>
           </section>
 
+          <footer class="page-footer"><span>청도팜 세일즈 코파일럿</span><span>작은 농가의 더 나은 출하 결정을 위해</span></footer>
+        </div>
+        <div class="content-wrap guide-view" id="guide-view" hidden>
+          <section class="guide-hero" aria-labelledby="guide-title">
+            <div>
+              <div class="guide-kicker">처음 오셨나요? 어렵지 않아요.</div>
+              <h1 id="guide-title" tabindex="-1">청도팜, 이렇게 이용해요.</h1>
+              <p>농산물 정보를 적고, 추천을 살펴보고,<br />내 상황에 맞는 출하 계획을 만들어 보세요.</p>
+            </div>
+            <svg class="guide-persimmon" aria-hidden="true"><use href="#persimmon" /></svg>
+          </section>
+          <div class="guide-intro">
+            <div><span class="guide-overline">HOW IT WORKS</span><h2>세 단계면 충분해요</h2><p>처음부터 차근차근 알려드릴게요.</p></div>
+            <span class="guide-time">로그인 없이 바로 시작</span>
+          </div>
+          <div class="guide-steps">
+            <article class="guide-card">
+              <span class="guide-step-number">01</span>
+              <div class="guide-card-icon"><svg><use href="#i-edit" /></svg></div>
+              <h3>수확 정보를 알려주세요</h3>
+              <p>작물과 출하할 양, 예정일을 입력해요. 색이나 크기처럼 눈에 보이는 작물 상태도 함께 적어주세요.</p>
+              <span class="guide-example">예시 <b>청도반시 · 300kg · 착색이 빨라요</b></span>
+            </article>
+            <article class="guide-card">
+              <span class="guide-step-number">02</span>
+              <div class="guide-card-icon"><svg><use href="#i-chart" /></svg></div>
+              <h3>추천과 근거를 살펴봐요</h3>
+              <p>작물 위험과 시장 정보를 바탕으로 제안한 출하 방법을 확인해요. 데이터 기준일과 주의사항도 꼭 읽어주세요.</p>
+              <span class="guide-example">확인할 것 <b>추천 근거 · 신뢰도 · 기준일</b></span>
+            </article>
+            <article class="guide-card">
+              <span class="guide-step-number">03</span>
+              <div class="guide-card-icon"><svg><use href="#i-check" /></svg></div>
+              <h3>내 출하 계획으로 정리해요</h3>
+              <p>추천을 그대로 승인하거나 농가 상황에 맞게 수정한 뒤 승인해요. 실제 주문이나 출하는 실행되지 않아요.</p>
+              <span class="guide-example">마지막 결정은 <b>언제나 농부님이</b></span>
+            </article>
+          </div>
+          <section class="guide-notice">
+            <div class="guide-notice-icon"><svg><use href="#i-info" /></svg></div>
+            <div><h2>시작하기 전에 알아두세요</h2><p>현재 분석은 실제 AI 연동 전의 데모이며, 실시간 시세가 아닌 데모 데이터를 사용합니다. 결과는 참고용으로만 활용하고, 현장 상황을 함께 확인해 주세요.</p></div>
+          </section>
+          <div class="guide-cta"><div><strong>준비되셨나요?</strong><span>우리 농산물에 맞는 출하 계획을 살펴보세요.</span></div><a href="#analysis" class="guide-start">출하 분석 시작하기 <svg><use href="#i-arrow" /></svg></a></div>
           <footer class="page-footer"><span>청도팜 세일즈 코파일럿</span><span>작은 농가의 더 나은 출하 결정을 위해</span></footer>
         </div>
       </main>
