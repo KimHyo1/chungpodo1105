@@ -52,6 +52,253 @@ document.querySelector("#input-title").setAttribute("tabindex", "-1");
 window.addEventListener("hashchange", () => showPage(true));
 showPage();
 
+const photoKind = document.querySelector("#photo-kind");
+const photoStatus = document.querySelector("#photo-status");
+const photoReview = document.querySelector("#photo-review");
+const photoButton = document.querySelector("#photo-analyze");
+const photoConsent = document.querySelector("#photo-consent");
+const photoInputs = [document.querySelector("#photo-camera"), document.querySelector("#photo-file")];
+const photoVersions = { crop: 0, quantity: 0, shipmentDate: 0, condition: 0 };
+const photoTouched = { crop: false, quantity: false, shipmentDate: false, condition: false };
+let selectedPhoto = null;
+let photoUrl = null;
+let photoController = null;
+let photoRevision = 0;
+
+function invalidatePreviousAnalysis() {
+  photoRevision += 1;
+  lastRequest.value = null;
+  lastResult = null;
+  approvedPlan = null;
+  setView("empty");
+}
+
+for (const [selector, field, event] of [
+  ["#crop", "crop", "change"],
+  ["#custom-crop", "crop", "input"],
+  ["#quantity", "quantity", "input"],
+  ["#harvest-date", "shipmentDate", "input"],
+  ["#condition", "condition", "input"],
+]) {
+  document.querySelector(selector).addEventListener(event, () => {
+    photoVersions[field] += 1;
+    photoTouched[field] = true;
+  });
+}
+
+function resetPhoto() {
+  if (photoUrl) URL.revokeObjectURL(photoUrl);
+  photoUrl = null;
+  selectedPhoto = null;
+  photoInputs.forEach((input) => { input.value = ""; });
+  document.querySelector("#photo-preview").removeAttribute("src");
+  document.querySelector("#photo-preview-wrap").hidden = true;
+  photoReview.hidden = true;
+  photoStatus.textContent = "";
+}
+
+photoInputs.forEach((input) => input.addEventListener("change", () => {
+  const file = input.files[0];
+  if (!file) return;
+  resetPhoto();
+  if (!["image/jpeg", "image/png"].includes(file.type)) {
+    photoStatus.textContent = "JPG 또는 PNG 사진을 선택해 주세요.";
+    return;
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    photoStatus.textContent = "20MB 이하 사진을 선택해 주세요.";
+    return;
+  }
+  selectedPhoto = file;
+  photoUrl = URL.createObjectURL(file);
+  document.querySelector("#photo-preview").src = photoUrl;
+  document.querySelector("#photo-preview-wrap").hidden = false;
+  if (photoConsent.checked) analyzePhoto();
+  else photoStatus.textContent = "사진 전송에 동의하면 자동으로 내용을 읽어요.";
+}));
+document.querySelector("#photo-remove").addEventListener("click", resetPhoto);
+photoKind.addEventListener("change", () => {
+  photoReview.hidden = true;
+  if (selectedPhoto && photoConsent.checked) analyzePhoto();
+  else photoStatus.textContent = selectedPhoto ? "사진 전송에 동의하면 자동으로 내용을 읽어요." : "";
+});
+photoConsent.addEventListener("change", () => {
+  if (!photoConsent.checked) {
+    if (photoController) photoController.abort();
+    photoStatus.textContent = "사진 전송 동의가 해제됐어요.";
+  } else if (selectedPhoto && !photoButton.disabled) {
+    analyzePhoto();
+  }
+});
+
+async function preparePhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const scale = Math.min(1, 2200 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("이 기기에서 사진을 처리할 수 없어요.");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const data = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
+    if (data.length > 4 * 1024 * 1024 * 4 / 3) throw new Error("사진이 너무 커요. 더 작은 사진을 선택해 주세요.");
+    return data;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+photoButton.addEventListener("click", analyzePhoto);
+
+function applyPhotoResult(result, versions) {
+  invalidatePreviousAnalysis();
+  const updated = [];
+  const missing = [];
+  const retained = [];
+  const apply = (field, label, value, setValue) => {
+    if (photoVersions[field] !== versions[field]) {
+      retained.push(label);
+    } else if (value) {
+      setValue(value);
+      updated.push(label);
+    } else {
+      missing.push(label);
+      if (!photoTouched[field] && field !== "condition") setValue("");
+    }
+  };
+  apply("crop", "작물명", result.crop, (value) => {
+    const select = document.querySelector("#crop");
+    const option = Array.from(select.options).find((item) => item.value === value && value !== "other");
+    select.value = option ? value : value ? "other" : "";
+    document.querySelector("#custom-crop").value = option ? "" : value;
+    select.dispatchEvent(new Event("change"));
+  });
+  apply("quantity", "출하 예정 수량", result.totalWeightKg, (value) => {
+    document.querySelector("#quantity").value = value;
+    document.querySelector("#quantity").dispatchEvent(new Event("input"));
+  });
+  apply("shipmentDate", "출하 예정일", result.shipmentDate, (value) => {
+    document.querySelector("#harvest-date").value = value;
+    document.querySelector("#harvest-date").dispatchEvent(new Event("input"));
+  });
+  const notes = [
+    result.grade && `라벨 표시 등급: ${result.grade}`,
+    result.itemsPerBox && `상자당 ${result.itemsPerBox}개`,
+    result.observation && `사진상 관찰: ${result.observation}`,
+  ].filter(Boolean).join(" / ");
+  const currentCondition = conditionInput.value.trim();
+  const combined = notes && !currentCondition.includes(notes)
+    ? [currentCondition, notes].filter(Boolean).join(" / ")
+    : currentCondition;
+  if (notes && combined.length > 500) {
+    retained.push("작물 상태 (500자 초과)");
+  } else {
+    apply("condition", "작물 상태", notes, () => {
+      conditionInput.value = combined;
+      conditionInput.dispatchEvent(new Event("input"));
+    });
+  }
+  const messages = [];
+  if (updated.length) messages.push(`자동 입력: ${updated.join(", ")}.`);
+  if (missing.length) messages.push(`사진에서 확인하지 못한 항목: ${missing.join(", ")}. 직접 확인해 주세요.`);
+  if (retained.length) messages.push(`기존 입력 유지: ${retained.join(", ")}. 직접 확인해 주세요.`);
+  messages.push("자동 입력한 내용도 맞는지 확인하고 고쳐주세요.");
+  photoStatus.textContent = messages.join(" ");
+}
+
+async function analyzePhoto() {
+  if (!selectedPhoto) {
+    photoStatus.textContent = "먼저 사진을 찍거나 선택해 주세요.";
+    return;
+  }
+  if (!photoConsent.checked) {
+    photoStatus.textContent = "사진 전송에 동의해 주세요.";
+    photoConsent.focus();
+    return;
+  }
+  if (photoButton.disabled) return;
+  const versions = { ...photoVersions };
+  photoButton.disabled = true;
+  photoKind.disabled = true;
+  photoInputs.forEach((input) => { input.disabled = true; });
+  document.querySelector("#photo-remove").disabled = true;
+  photoReview.hidden = true;
+  photoStatus.textContent = "사진을 살펴보고 있어요. 잠시만 기다려 주세요.";
+  const controller = new AbortController();
+  photoController = controller;
+  const timeout = window.setTimeout(() => controller.abort(), 90000);
+  try {
+    const image = await preparePhoto(selectedPhoto);
+    const response = await fetch("/api/photo-analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ kind: photoKind.value, mimeType: "image/jpeg", image, consent: true }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const error = await readApiError(response);
+      throw new Error(error.message || `사진 분석에 실패했어요. (오류 코드 ${response.status})`);
+    }
+    const result = await response.json();
+    const fields = ["crop", "grade", "itemsPerBox", "weightPerBoxKg", "observation",
+      "totalWeightKg", "totalWeightEvidence", "shipmentDate", "shipmentDateEvidence"];
+    if (!result || !fields.every((field) => typeof result[field] === "string")) {
+      throw new Error("사진 분석 결과 형식이 올바르지 않아요.");
+    }
+    if (!photoConsent.checked) throw new DOMException("Consent withdrawn", "AbortError");
+    applyPhotoResult(result, versions);
+    document.querySelector("#photo-weight").value = result.weightPerBoxKg;
+    document.querySelector("#photo-boxes").value = "";
+    photoReview.hidden = photoKind.value !== "label";
+  } catch (error) {
+    photoStatus.textContent = error.name === "AbortError"
+      ? photoConsent.checked
+        ? "사진 분석 시간이 길어졌어요. 다시 시도하거나 직접 입력해 주세요."
+        : "사진 전송 동의가 해제되어 분석을 중단했어요."
+      : error.message?.includes("직접 입력")
+        ? error.message
+        : `${error.message || "사진을 분석하지 못했어요."} 직접 입력해도 괜찮아요.`;
+  } finally {
+    window.clearTimeout(timeout);
+    photoController = null;
+    photoButton.disabled = false;
+    photoKind.disabled = false;
+    photoInputs.forEach((input) => { input.disabled = false; });
+    document.querySelector("#photo-remove").disabled = false;
+  }
+}
+
+document.querySelector("#photo-apply").addEventListener("click", () => {
+  const weight = document.querySelector("#photo-weight");
+  const boxes = document.querySelector("#photo-boxes");
+  for (const input of [weight, boxes]) {
+    if (!input.value || !input.validity.valid) {
+      photoStatus.textContent = "상자당 중량과 출하할 상자 수를 올바르게 입력해 주세요.";
+      input.focus();
+      return;
+    }
+  }
+  const product = Number(weight.value) * Number(boxes.value);
+  const rounded = Math.round(product);
+  const total = Math.abs(product - rounded) <= Number.EPSILON * Math.max(1, Math.abs(product)) * 4
+    ? rounded : product;
+  if (!Number.isSafeInteger(total) || total < 1 || total > 1000000) {
+    photoStatus.textContent = "총중량은 1~1,000,000kg의 정수로 확인해 주세요. 직접 입력할 수도 있어요.";
+    weight.focus();
+    return;
+  }
+  invalidatePreviousAnalysis();
+  document.querySelector("#quantity").value = total;
+  document.querySelector("#quantity").dispatchEvent(new Event("input"));
+  photoStatus.textContent = `상자 수로 계산한 총중량 ${total}kg을 입력했어요. 맞는지 확인해 주세요.`;
+});
+
 conditionInput.addEventListener("input", () => {
   document.querySelector("#condition-count").textContent = conditionInput.value.length;
   document.querySelector("#condition-error").textContent = "";
@@ -70,7 +317,7 @@ document.querySelector("#crop").addEventListener("change", (event) => {
   document.querySelector("#crop-error").textContent = "";
   const isCustomCrop = event.target.value === "other";
   document.querySelector("#custom-crop-field").hidden = !isCustomCrop;
-  if (isCustomCrop) document.querySelector("#custom-crop").focus();
+  if (isCustomCrop && event.isTrusted) document.querySelector("#custom-crop").focus();
 });
 document.querySelector("#custom-crop").addEventListener("input", () => {
   document.querySelector("#crop-error").textContent = "";
@@ -176,6 +423,7 @@ function setFieldError(id, message) {
 }
 
 async function analyze(request) {
+  const analysisPhotoRevision = photoRevision;
   lastResult = null;
   approvedPlan = null;
   setView("loading");
@@ -192,6 +440,7 @@ async function analyze(request) {
       signal: controller.signal,
     });
 
+    if (analysisPhotoRevision !== photoRevision) return;
     if (!response.ok) {
       const apiError = await readApiError(response);
       throw new AnalysisRequestError(
@@ -207,10 +456,12 @@ async function analyze(request) {
       throw new Error("분석 서버가 올바른 결과 형식으로 응답하지 않았어요.");
     }
     validateResult(result);
+    if (analysisPhotoRevision !== photoRevision) return;
     renderResult(result);
     lastResult = result;
     setView("result");
   } catch (error) {
+    if (analysisPhotoRevision !== photoRevision) return;
     errorMessage.textContent = error instanceof Error && error.name === "AbortError"
       ? "분석 시간이 길어져 요청을 중단했어요. 잠시 후 다시 시도해 주세요."
       : error instanceof Error
@@ -372,6 +623,7 @@ function closeEditForm() {
 }
 
 async function approvePlan(action, status = "추천을 검토하고 승인했어요.") {
+  const planPhotoRevision = photoRevision;
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -383,6 +635,7 @@ async function approvePlan(action, status = "추천을 검토하고 승인했어
     }),
   });
   const result = await response.json();
+  if (planPhotoRevision !== photoRevision) return;
   if (!response.ok) {
     throw new Error(result.error || "출하 계획 승인에 실패했어요.");
   }

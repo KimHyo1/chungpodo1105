@@ -1,2 +1,4 @@
-github-copilot-sdk
-agent-framework
+github-copilot-sdk==1.0.28
+agent-framework-openai==1.18.0
+azure-identity
+aiohttp

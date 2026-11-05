@@ -169,11 +169,53 @@
               </div>
 
               <form id="analysis-form" novalidate>
+                <section class="photo-helper" aria-labelledby="photo-title">
+                  <div class="photo-heading">
+                    <span class="photo-icon" aria-hidden="true">📷</span>
+                    <div><h3 id="photo-title">사진으로 간편하게 입력</h3><p>사진을 읽어 농산물 정보를 자동으로 채워드려요.</p></div>
+                  </div>
+                  <div class="photo-options">
+                    <label for="photo-kind">어떤 사진인가요?</label>
+                    <select id="photo-kind">
+                      <option value="label">상자 라벨</option>
+                      <option value="produce">포장 전 농산물</option>
+                    </select>
+                    <div class="photo-buttons">
+                      <label class="photo-select-button" for="photo-camera">사진 찍기</label>
+                      <input id="photo-camera" class="visually-hidden" type="file" accept="image/jpeg,image/png" capture="environment" />
+                      <label class="photo-select-button" for="photo-file">사진 선택</label>
+                      <input id="photo-file" class="visually-hidden" type="file" accept="image/jpeg,image/png" />
+                    </div>
+                    <p class="photo-tip">글자가 잘 보이게 가까이 찍어주세요. 연락처 등 개인정보는 가려주세요.</p>
+                    <div id="photo-preview-wrap" class="photo-preview-wrap" hidden>
+                      <img id="photo-preview" alt="선택한 사진 미리보기" />
+                      <button id="photo-remove" type="button" class="photo-remove">사진 삭제</button>
+                    </div>
+                    <label class="photo-consent" for="photo-consent">
+                      <input type="checkbox" id="photo-consent" />
+                      <span>사진을 Copilot 모델 서비스로 전송해 분석하는 데 동의합니다. 앱은 분석 후 세션 삭제를 시도하며, 서비스의 데이터 처리 정책은 별도로 적용됩니다.</span>
+                    </label>
+                    <button id="photo-analyze" class="photo-analyze-button" type="button">사진 다시 읽기</button>
+                    <p id="photo-status" class="photo-status" role="status" aria-live="polite"></p>
+                  </div>
+                  <div id="photo-review" class="photo-review" hidden>
+                    <h4>상자 수로 총중량 계산</h4>
+                    <p>상자마다 중량이 같다면 출하할 상자 수를 입력해 주세요.</p>
+                    <div class="photo-review-grid">
+                      <label>상자당 중량 (kg) <input id="photo-weight" type="number" min="0.01" step="any" inputmode="decimal" /></label>
+                      <label>출하할 상자 수 <input id="photo-boxes" type="number" min="1" step="1" inputmode="numeric" /></label>
+                    </div>
+                    <p class="photo-tip">개수만으로 무게를 계산하지 않아요.</p>
+                    <button id="photo-apply" class="photo-analyze-button" type="button">총중량 계산해 입력하기</button>
+                  </div>
+                  <p class="photo-tip photo-warning">자동 입력은 참고용이에요. 틀린 내용은 아래에서 고쳐주세요. 사진에 없는 출하일과 총중량은 직접 확인해야 해요. 병해나 공식 등급은 사진으로 확정할 수 없어요.</p>
+                </section>
                 <div class="field">
                   <label for="crop">작물명 <span class="required-mark">*</span></label>
                   <div class="select-wrap">
                     <span class="field-icon crop-icon"><svg><use href="#i-leaf" /></svg></span>
                     <select id="crop" name="crop" required>
+                      <option value="">작물명을 선택해 주세요</option>
                       <option value="복숭아" selected>복숭아</option>
                       <option value="청도반시">청도반시</option>
                       <option value="사과">사과</option>

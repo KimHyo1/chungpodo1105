@@ -1,3 +1,9 @@
 __pycache__
+.venv
+venv
 .env
+.env.*
 .git
+.azure
+.azd
+*.log

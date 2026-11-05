@@ -8,9 +8,10 @@ MVP는 `POST /api/analyze` 하나의 완료된 사용자 흐름을 제공한다.
 
 - `app.py`와 `static/index.html`에 로그인 없는 웹 UI, 분석 API, 입력 검증, 결과·승인 흐름, 데모 에이전트가 구현되어 있다.
 - 현재 서버는 외부 AI 자격 증명 없이 E2E를 검증할 수 있는 `runtime: demo` 모드로 동작한다.
-- `AI_RUNTIME=live`로 실행하면 `ai_runtime.py`가 Copilot SDK 세션과 Agent Framework `Agent.run`을 사용한다. 라이브 모드는 패키지와 모델 인증이 준비된 환경에서만 활성화한다.
-- 의존성은 `requirements.txt`에 고정했으며, 현재 검증 환경에서는 패키지 설치가 완료되지 않아 라이브 모드는 실행 검증 전이다.
+- `AI_RUNTIME=live`로 실행하면 `ai_runtime.py`가 Copilot SDK 세션과 Agent Framework `Agent.run`을 사용한다. 출하 전략 단계는 Azure OpenAI와 `DefaultAzureCredential`을 사용하며, Azure Container Apps Managed Identity로 인증한다.
+- Copilot SDK와 Agent Framework OpenAI 통합 버전은 `requirements.txt`에 지정되어 있다. 실제 서비스 인증을 이용한 라이브 모드는 배포 환경에서 별도로 검증해야 한다.
 - 데모 모드는 실제 AI 연동을 대체한 것으로 표시하지 않으며, 외부 데이터가 아닌 데모 데이터임을 UI에 표시한다.
+- 라이브 모드도 현재는 데모 시장 데이터를 사용한다. 시장 조회 결과와 Copilot 위험 분석을 Agent Framework에 전달하고, 데이터 기준일과 데모 경고를 서버가 결과에 포함한다.
 
 ## 1. 기술 목표
 
@@ -104,6 +105,16 @@ Agent Orchestrator
 
 요청에는 `requiresApproval`, `summary`, `recommendedAction`, `recommendedChannel`을 전달한다. 사용자가 수정한 경우 `recommendedAction`에 수정 내용을 전달하며, 응답의 `status`, `approvedAt`, `plan`, `notice`를 확인한 뒤 최종 계획을 표시한다.
 
+### `POST /api/photo-analyze`
+
+- 사용자의 동의를 받은 뒤 `{kind: "label" | "produce", mimeType: "image/jpeg" | "image/png", image: "base64 데이터", consent: true}`를 전송한다. 이미지 데이터는 최대 4MB다.
+- `PHOTO_ANALYSIS_ENABLED=true`로 설정했을 때 Copilot SDK의 이미지 첨부 기능으로 분석하며 `COPILOT_VISION_MODEL`로 이미지 지원 모델을 지정한다. 기본값은 `gpt-5`이며 모델 접근 권한과 이미지 지원 여부는 배포 환경에서 확인해야 한다. Copilot 인증과 SDK 런타임이 필요하며, 설정·인증 또는 분석 실패 시 오류를 반환하고 직접 입력을 유지한다.
+- 결과는 문자열 `crop`, `grade`, `itemsPerBox`, `weightPerBoxKg`, `observation`, `totalWeightKg`, `totalWeightEvidence`, `shipmentDate`, `shipmentDateEvidence`를 제공한다. 빈 문자열은 확인하지 못한 값이다. 농산물 사진은 작물명 후보와 외관 관찰만 반환한다. 라벨의 전체 출하 총중량과 출하 예정일은 명시된 근거가 일치할 때만 반환하며, 상자 중량이나 수확일을 대신 사용하지 않는다.
+- 사진 전송에 동의하면 인식 가능한 항목을 입력란에 자동 반영하고 사용자가 확인·수정한다. 분석 중 사용자가 수정한 항목은 덮어쓰지 않는다. 확인하지 못한 항목은 명시하고, 사진 분석 전에 수정하지 않은 예시 값은 비워 직접 확인하도록 한다. 상자당 kg과 사용자가 입력한 상자 수가 모두 있어야 총 kg을 계산하며, 개수로 무게를 추정하지 않는다. 병해와 공식 등급은 사진으로 확정하지 않는다.
+- 사진은 Copilot 모델 서비스로 전송된다. 앱은 사진 파일을 직접 저장하지 않고 SDK 세션을 분석 종료 시 삭제한다. SDK의 세션은 처리 중 디스크에 기록될 수 있으며 비정상 종료 또는 삭제 실패 시 잔존할 수 있으므로 운영 환경에서 정리와 서비스 측 데이터 정책을 확인해야 한다.
+
+로컬 환경에서는 `requirements.txt` 설치 후 `python -m copilot download-runtime`으로 SDK 런타임을 미리 준비하고 Copilot 인증을 설정한다. 요청 중 런타임 다운로드로 장시간 대기하지 않도록 `COPILOT_SKIP_CLI_DOWNLOAD=1`을 지정한다. Docker 이미지는 빌드 시 런타임을 준비한다. `PHOTO_ANALYSIS_ENABLED`를 설정하지 않으면 사진 분석 API는 사용 불가 메시지를 반환한다.
+
 ## 4. 에이전트 설계
 
 ### 공통 실행 계층
@@ -119,6 +130,8 @@ Agent Orchestrator
 #### Microsoft Agent Framework
 
 분석 요청을 받고 ShipmentPlanner 단계의 실행과 입력 컨텍스트를 관리한다. `ai_runtime.py`의 `Agent.run` 결과가 누락되거나 JSON 검증에 실패하면 최종 추천을 생성하지 않고 오류 상태를 반환한다.
+
+출하 전략 모델은 `OpenAIChatCompletionClient`의 Azure OpenAI 경로를 사용한다. 필요한 설정은 `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` 또는 `AZURE_OPENAI_CHAT_COMPLETION_MODEL`, 선택적 `AZURE_OPENAI_API_VERSION`이며, API 키 대신 Container Apps Managed Identity의 Entra 토큰을 사용한다. Copilot SDK는 서버 환경의 Copilot 인증을 별도로 사용한다. 배포 절차와 실제 검증 조건은 [README](./README.md)의 Azure 배포 항목을 참고한다.
 
 ### MVP 에이전트
 
@@ -183,7 +196,8 @@ Orchestrator
 ## 7. Azure 배포 및 운영
 
 - Azure Container Apps에 배포
-- Copilot SDK 관련 비밀키는 Azure 환경변수로 관리
+- Copilot SDK 서버 인증 토큰은 Azure Container Apps Secret으로 관리한다.
+- Azure OpenAI는 Container Apps 시스템 할당 Managed Identity와 RBAC로 인증하며 API 키를 사용하지 않는다.
 - `.env`와 비밀키를 저장소에 커밋하지 않음
 - 공개 Azure 기본 도메인으로 제출
 - 애플리케이션 오류와 분석 요청 실패를 로그로 확인
