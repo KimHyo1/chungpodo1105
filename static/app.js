@@ -8,6 +8,9 @@ const analysisResult = document.querySelector("#analysis-result");
 const errorMessage = document.querySelector("#error-message");
 const conditionInput = document.querySelector("#condition");
 const lastRequest = { value: null };
+let lastResult = null;
+let approvedPlan = null;
+let planPending = false;
 
 class AnalysisRequestError extends Error {
   constructor(message, retryable) {
@@ -23,6 +26,7 @@ document.querySelector("#today-date").textContent =
 conditionInput.addEventListener("input", () => {
   document.querySelector("#condition-count").textContent = conditionInput.value.length;
   document.querySelector("#condition-error").textContent = "";
+  conditionInput.removeAttribute("aria-invalid");
 });
 
 document.querySelector("#quantity").addEventListener("input", () => {
@@ -46,6 +50,7 @@ document.querySelector("#custom-crop").addEventListener("input", () => {
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
+  if (planPending) return;
   const request = getValidatedRequest();
   if (!request) return;
   lastRequest.value = request;
@@ -57,7 +62,7 @@ document.querySelector("#retry-button").addEventListener("click", () => {
 });
 
 document.querySelector("#approve-button").addEventListener("click", () => {
-  showFinalPlan(document.querySelector("#recommended-action").textContent, "추천을 검토하고 승인했어요.");
+  if (lastResult) submitPlan(lastResult.recommendedAction);
 });
 
 document.querySelector("#edit-button").addEventListener("click", openEditForm);
@@ -71,7 +76,7 @@ document.querySelector("#save-edit").addEventListener("click", () => {
     return;
   }
   document.querySelector("#edited-action").removeAttribute("aria-invalid");
-  showFinalPlan(editedAction, "농가 상황에 맞게 수정한 계획이에요.");
+  submitPlan(editedAction);
 });
 
 function getValidatedRequest() {
@@ -120,7 +125,7 @@ function getValidatedRequest() {
 }
 
 function clearValidation() {
-  for (const id of ["crop-error", "quantity-error", "date-error"]) {
+  for (const id of ["crop-error", "quantity-error", "date-error", "condition-error"]) {
     document.getElementById(id).textContent = "";
   }
   for (const id of ["quantity", "harvest-date", "condition"]) {
@@ -134,6 +139,8 @@ function setFieldError(id, message) {
 }
 
 async function analyze(request) {
+  lastResult = null;
+  approvedPlan = null;
   setView("loading");
   analyzeButton.disabled = true;
   buttonLabel.textContent = "분석 중이에요...";
@@ -164,6 +171,7 @@ async function analyze(request) {
     }
     validateResult(result);
     renderResult(result);
+    lastResult = result;
     setView("result");
   } catch (error) {
     errorMessage.textContent = error instanceof Error && error.name === "AbortError"
@@ -216,6 +224,10 @@ function validateResult(result) {
     result.confidence.reasons.length > 0 &&
     result.confidence.reasons.every(isString);
   const validWarnings = Array.isArray(result?.warnings) && result.warnings.every(isString);
+  const validSteps = Array.isArray(result?.steps) && result.steps.length > 0 &&
+    result.steps.every((step) =>
+      isString(step?.id) && isString(step?.label) &&
+      ["completed", "failed", "pending", "running", "in_progress"].includes(step?.status));
 
   if (
     !isString(result?.summary) ||
@@ -227,6 +239,7 @@ function validateResult(result) {
     !validConfidenceReasons ||
     !isDate(result?.dataDate) ||
     !validWarnings ||
+    !validSteps ||
     typeof result?.requiresApproval !== "boolean"
   ) {
     throw new Error("분석 결과의 필수 정보가 누락되거나 형식이 올바르지 않아요. 다시 시도해 주세요.");
@@ -258,13 +271,25 @@ function renderResult(result) {
   document.querySelector("#runtime-label").lastChild.textContent =
     result.runtime === "demo" ? " 데모 런타임" : " 분석 결과";
   document.querySelector("#demo-label").hidden = result.runtime !== "demo";
-  document.querySelectorAll("#execution-timeline li").forEach((step) => {
-    step.classList.add("completed");
-  });
+  const statusLabels = {
+    completed: "완료", failed: "실패", pending: "대기", running: "진행 중", in_progress: "진행 중",
+  };
+  document.querySelector("#execution-timeline").replaceChildren(...result.steps.map((step, index) => {
+    const item = document.createElement("li");
+    const number = document.createElement("span");
+    number.textContent = String(index + 1).padStart(2, "0");
+    item.dataset.stage = step.id;
+    item.dataset.status = step.status;
+    item.append(number, document.createTextNode(`${step.label} · ${statusLabels[step.status]}`));
+    return item;
+  }));
 
   document.querySelector("#approval-section").hidden = !result.requiresApproval;
+  document.querySelector("#approval-actions").hidden = false;
   document.querySelector("#final-plan").hidden = true;
   document.querySelector("#edit-form").hidden = true;
+  document.querySelector("#plan-error").hidden = true;
+  document.querySelector("#final-plan-text").textContent = "";
 }
 
 function createListItem(text) {
@@ -292,22 +317,79 @@ function setView(view) {
 
 function openEditForm() {
   const editForm = document.querySelector("#edit-form");
-  const currentPlan = document.querySelector("#final-plan-text").textContent ||
-    document.querySelector("#recommended-action").textContent;
+  const currentPlan = approvedPlan?.plan.action || lastResult?.recommendedAction || "";
   document.querySelector("#edited-action").value = currentPlan;
   editForm.hidden = false;
   document.querySelector("#approval-section").hidden = false;
+  document.querySelector("#approval-actions").hidden = true;
   document.querySelector("#final-plan").hidden = true;
+  document.querySelector("#plan-error").hidden = true;
   document.querySelector("#edited-action").focus();
 }
 
 function closeEditForm() {
   document.querySelector("#edit-form").hidden = true;
+  document.querySelector("#plan-error").hidden = true;
+  document.querySelector("#approval-actions").hidden = false;
+  if (approvedPlan) showFinalPlan(approvedPlan);
 }
 
-function showFinalPlan(action, status) {
-  document.querySelector("#final-plan-text").textContent = action;
-  document.querySelector("#final-plan-status").textContent = status;
+async function submitPlan(action) {
+  if (!lastResult || planPending) return;
+  planPending = true;
+  const buttons = ["#approve-button", "#edit-button", "#save-edit", "#cancel-edit", "#analyze-button"];
+  buttons.forEach((selector) => { document.querySelector(selector).disabled = true; });
+  const planError = document.querySelector("#plan-error");
+  planError.hidden = true;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 60000);
+  try {
+    const response = await fetch("/api/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        requiresApproval: lastResult.requiresApproval,
+        summary: lastResult.summary,
+        recommendedAction: action,
+        recommendedChannel: lastResult.recommendedChannel,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const error = await readApiError(response);
+      throw new Error(error.message || `계획 승인에 실패했어요. (오류 코드 ${response.status})`);
+    }
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error("승인 서버가 올바른 결과 형식으로 응답하지 않았어요.");
+    }
+    if (result?.status !== "approved" || typeof result?.plan?.action !== "string" ||
+        !result.plan.action.trim() || typeof result?.plan?.summary !== "string" ||
+        !result.plan.summary.trim() || typeof result?.plan?.channel !== "string" ||
+        !result.plan.channel.trim() || typeof result?.notice !== "string" ||
+        !result.notice.trim() || typeof result?.approvedAt !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(result.approvedAt)) {
+      throw new Error("승인 결과의 필수 정보가 누락되거나 형식이 올바르지 않아요.");
+    }
+    approvedPlan = result;
+    showFinalPlan(result);
+  } catch (error) {
+    planError.textContent = error instanceof Error && error.name === "AbortError"
+      ? "승인 요청 시간이 초과됐어요. 다시 시도해 주세요."
+      : error instanceof Error ? error.message : "승인 요청에 실패했어요. 다시 시도해 주세요.";
+    planError.hidden = false;
+  } finally {
+    window.clearTimeout(timeoutId);
+    buttons.forEach((selector) => { document.querySelector(selector).disabled = false; });
+    planPending = false;
+  }
+}
+
+function showFinalPlan(result) {
+  document.querySelector("#final-plan-text").textContent = result.plan.action;
+  document.querySelector("#final-plan-status").textContent = `${result.notice} 승인일: ${formatDate(result.approvedAt)}`;
   document.querySelector("#approval-section").hidden = true;
   document.querySelector("#edit-form").hidden = true;
   document.querySelector("#final-plan").hidden = false;

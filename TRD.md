@@ -79,9 +79,28 @@ Agent Orchestrator
   "warnings": [
     "실시간 도매시장 가격이 아닌 데모 데이터입니다."
   ],
-  "requiresApproval": true
+  "requiresApproval": true,
+  "runtime": "demo",
+  "steps": [
+    { "id": "validating", "label": "입력 검증", "status": "completed" },
+    { "id": "crop-risk", "label": "작물 위험 분석", "status": "completed" },
+    { "id": "market-snapshot", "label": "시장 데이터 조회", "status": "completed" },
+    { "id": "shipment-plan", "label": "출하 전략 생성", "status": "completed" }
+  ]
 }
 ```
+
+현재 API는 분석이 끝난 뒤 `steps`를 반환한다. UI는 요청 중에는 일반 대기 상태를 표시하고, 응답을 받은 뒤 실제 반환된 단계와 상태를 표시한다.
+
+### `GET /api/demo-data`
+
+대표 작물, 데모 시장 데이터 기준일, 데이터 출처를 반환한다. 실제 농가 개인정보나 실시간 가격을 반환하지 않는다.
+
+### `POST /api/plan`
+
+분석 결과의 `requiresApproval: true`를 확인한 뒤 사용자가 승인한 출하 계획을 반환한다. 실제 주문·출하 API를 호출하지 않는다.
+
+요청에는 `requiresApproval`, `summary`, `recommendedAction`, `recommendedChannel`을 전달한다. 사용자가 수정한 경우 `recommendedAction`에 수정 내용을 전달하며, 응답의 `status`, `approvedAt`, `plan`, `notice`를 확인한 뒤 최종 계획을 표시한다.
 
 ## 4. 에이전트 설계
 
@@ -157,6 +176,7 @@ Orchestrator
 - 데이터 부족: `warnings`에 데이터 부족 사유 표시
 - 스키마 검증 실패: 결과를 성공으로 표시하지 않고 오류 로그 기록
 - 신뢰도는 통계적 확률로 표현하지 않고 데이터 품질과 입력 완성도에 따른 수준·근거로 표시
+- 승인 요청은 서버에서 `requiresApproval: true`를 확인하고, 실제 외부 주문 작업은 수행하지 않는다.
 
 ## 7. Azure 배포 및 운영
 

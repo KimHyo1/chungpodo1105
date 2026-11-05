@@ -267,13 +267,7 @@
                   </div>
                   <div class="execution-summary" aria-label="분석 단계">
                     <span class="execution-title">분석 흐름</span>
-                    <ol id="execution-timeline">
-                      <li data-stage="validating"><span>01</span>입력 검증</li>
-                      <li data-stage="crop-risk"><span>02</span>작물 위험 분석</li>
-                      <li data-stage="market-snapshot"><span>03</span>시장 데이터 조회</li>
-                      <li data-stage="shipment-plan"><span>04</span>출하 전략 생성</li>
-                      <li data-stage="completed"><span>05</span>분석 완료</li>
-                    </ol>
+                    <ol id="execution-timeline"></ol>
                   </div>
                   <h3 class="recommendation-title" id="recommendation-title"></h3>
                   <p class="recommendation-summary" id="recommendation-summary"></p>
@@ -301,14 +295,15 @@
 
                   <div class="approval-section" id="approval-section">
                     <div class="approval-copy"><span class="approval-check"><svg><use href="#i-check" /></svg></span><div><strong>이 추천을 검토하셨나요?</strong><span>승인 전까지 계획은 확정되지 않아요.</span></div></div>
-                    <div class="approval-actions">
+                    <div class="approval-actions" id="approval-actions">
                       <button class="edit-button" type="button" id="edit-button"><svg><use href="#i-edit" /></svg> 수정하기</button>
                       <button class="approve-button" type="button" id="approve-button"><svg><use href="#i-check" /></svg> 추천 승인</button>
                     </div>
+                    <p class="plan-error" id="plan-error" role="alert" hidden></p>
                     <div class="edit-form" id="edit-form" hidden>
                       <label for="edited-action">최종 출하 계획을 수정해 주세요.</label>
                       <textarea id="edited-action" rows="3" maxlength="500"></textarea>
-                      <div class="edit-actions"><button type="button" class="cancel-edit" id="cancel-edit">취소</button><button type="button" class="save-edit" id="save-edit">수정 계획 저장</button></div>
+                      <div class="edit-actions"><button type="button" class="cancel-edit" id="cancel-edit">취소</button><button type="button" class="save-edit" id="save-edit">수정 후 승인</button></div>
                     </div>
                   </div>
                   <div class="final-plan" id="final-plan" hidden>

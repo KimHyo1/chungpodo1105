@@ -207,8 +207,11 @@ textarea::placeholder { color: #b1b8ae; }
 .execution-summary ol { display: flex; flex: 1; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .execution-summary li { display: inline-flex; align-items: center; gap: 4px; padding: 4px 5px; color: #71806d; background: #eef4e9; border-radius: 4px; font-size: 7px; white-space: nowrap; }
 .execution-summary li span { display: grid; width: 12px; height: 12px; place-items: center; color: #52754d; background: #dfead7; border-radius: 50%; font: 600 6px "DM Sans", sans-serif; }
-.execution-summary li[data-stage="completed"] { color: #fff; background: #5f8957; }
-.execution-summary li[data-stage="completed"] span { color: #52754d; background: #fff; }
+.execution-summary li[data-status="completed"] { color: #fff; background: #5f8957; }
+.execution-summary li[data-status="completed"] span { color: #52754d; background: #fff; }
+.execution-summary li[data-status="failed"] { color: #a44f42; background: #fbefeb; }
+.execution-summary li[data-status="running"], .execution-summary li[data-status="in_progress"] { color: #966a2e; background: #faf3e6; }
+.plan-error { margin: 8px 0 0; color: #a84d3f; font-size: 10px; line-height: 1.5; }
 .risk-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; color: #55774f; background: #edf4e9; border-radius: 5px; font-size: 9px; font-weight: 700; }
 .risk-badge::before { width: 5px; height: 5px; content: ""; background: #80a472; border-radius: 50%; }
 .risk-badge[data-risk="high"] { color: #a44f42; background: #fbefeb; }
