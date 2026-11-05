@@ -90,14 +90,18 @@ document.querySelector("#retry-button").addEventListener("click", () => {
   if (lastRequest.value) analyze(lastRequest.value);
 });
 
-document.querySelector("#approve-button").addEventListener("click", () => {
-  if (lastResult) submitPlan(lastResult.recommendedAction);
+document.querySelector("#approve-button").addEventListener("click", async () => {
+  try {
+    await approvePlan(document.querySelector("#recommended-action").textContent);
+  } catch (error) {
+    document.querySelector("#final-plan-status").textContent = error.message;
+  }
 });
 
 document.querySelector("#edit-button").addEventListener("click", openEditForm);
 document.querySelector("#final-edit").addEventListener("click", openEditForm);
 document.querySelector("#cancel-edit").addEventListener("click", closeEditForm);
-document.querySelector("#save-edit").addEventListener("click", () => {
+document.querySelector("#save-edit").addEventListener("click", async () => {
   const editedAction = document.querySelector("#edited-action").value.trim();
   if (!editedAction) {
     document.querySelector("#edited-action").setAttribute("aria-invalid", "true");
@@ -105,7 +109,11 @@ document.querySelector("#save-edit").addEventListener("click", () => {
     return;
   }
   document.querySelector("#edited-action").removeAttribute("aria-invalid");
-  submitPlan(editedAction);
+  try {
+    await approvePlan(editedAction, "농가 상황에 맞게 수정한 계획이에요.");
+  } catch (error) {
+    document.querySelector("#final-plan-status").textContent = error.message;
+  }
 });
 
 function getValidatedRequest() {
@@ -363,62 +371,27 @@ function closeEditForm() {
   if (approvedPlan) showFinalPlan(approvedPlan);
 }
 
-async function submitPlan(action) {
-  if (!lastResult || planPending) return;
-  planPending = true;
-  const buttons = ["#approve-button", "#edit-button", "#save-edit", "#cancel-edit", "#analyze-button"];
-  buttons.forEach((selector) => { document.querySelector(selector).disabled = true; });
-  const planError = document.querySelector("#plan-error");
-  planError.hidden = true;
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 60000);
-  try {
-    const response = await fetch("/api/plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        requiresApproval: lastResult.requiresApproval,
-        summary: lastResult.summary,
-        recommendedAction: action,
-        recommendedChannel: lastResult.recommendedChannel,
-      }),
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      const error = await readApiError(response);
-      throw new Error(error.message || `계획 승인에 실패했어요. (오류 코드 ${response.status})`);
-    }
-    let result;
-    try {
-      result = await response.json();
-    } catch {
-      throw new Error("승인 서버가 올바른 결과 형식으로 응답하지 않았어요.");
-    }
-    if (result?.status !== "approved" || typeof result?.plan?.action !== "string" ||
-        !result.plan.action.trim() || typeof result?.plan?.summary !== "string" ||
-        !result.plan.summary.trim() || typeof result?.plan?.channel !== "string" ||
-        !result.plan.channel.trim() || typeof result?.notice !== "string" ||
-        !result.notice.trim() || typeof result?.approvedAt !== "string" ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(result.approvedAt)) {
-      throw new Error("승인 결과의 필수 정보가 누락되거나 형식이 올바르지 않아요.");
-    }
-    approvedPlan = result;
-    showFinalPlan(result);
-  } catch (error) {
-    planError.textContent = error instanceof Error && error.name === "AbortError"
-      ? "승인 요청 시간이 초과됐어요. 다시 시도해 주세요."
-      : error instanceof Error ? error.message : "승인 요청에 실패했어요. 다시 시도해 주세요.";
-    planError.hidden = false;
-  } finally {
-    window.clearTimeout(timeoutId);
-    buttons.forEach((selector) => { document.querySelector(selector).disabled = false; });
-    planPending = false;
+async function approvePlan(action, status = "추천을 검토하고 승인했어요.") {
+  const response = await fetch("/api/plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      requiresApproval: true,
+      summary: document.querySelector("#recommendation-summary").textContent,
+      recommendedAction: action,
+      recommendedChannel: document.querySelector("#recommended-channel").textContent,
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.error || "출하 계획 승인에 실패했어요.");
   }
+  showFinalPlan(result.plan.action, status);
 }
 
-function showFinalPlan(result) {
-  document.querySelector("#final-plan-text").textContent = result.plan.action;
-  document.querySelector("#final-plan-status").textContent = `${result.notice} 승인일: ${formatDate(result.approvedAt)}`;
+function showFinalPlan(action, status) {
+  document.querySelector("#final-plan-text").textContent = action;
+  document.querySelector("#final-plan-status").textContent = status;
   document.querySelector("#approval-section").hidden = true;
   document.querySelector("#edit-form").hidden = true;
   document.querySelector("#final-plan").hidden = false;
