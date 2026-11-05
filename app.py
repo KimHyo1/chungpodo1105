@@ -201,6 +201,12 @@ class Handler(BaseHTTPRequestHandler):
                 result = AgentOrchestrator().analyze(payload)
             else:
                 result = create_approved_plan(body)
+        except AiRuntimeError as exc:
+            self._send_json(
+                HTTPStatus.BAD_GATEWAY,
+                {"error": str(exc), "retryable": True},
+            )
+            return
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc), "retryable": False})
             return
