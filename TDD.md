@@ -71,10 +71,5 @@
 - `GET /health`가 `{"status":"ok"}`를 반환
 - 대표 입력으로 `POST /api/analyze`가 추천·근거·신뢰도·기준일·주의사항을 반환
 - 현재 응답의 `runtime`은 `demo`이며, 실제 SDK 연동 후 `runtime` 표시와 결과 스키마를 다시 검증한다.
-
-## 7. 현재 구현 검증
-
-- `python -m py_compile app.py` 통과
-- `GET /health`가 `{"status":"ok"}`를 반환
-- 대표 입력으로 `POST /api/analyze`가 추천·근거·신뢰도·기준일·주의사항을 반환
-- 현재 응답의 `runtime`은 `demo`이며, 실제 SDK 연동 후 `runtime` 표시와 결과 스키마를 다시 검증한다.
+- `AI_RUNTIME=live`에서는 SDK 인증·모델 응답·JSON 스키마를 별도 검증한다.
+- `requirements.txt` 설치 후 라이브 모드에서 Copilot SDK와 Agent Framework 패키지 import 및 모델 인증을 확인한다.

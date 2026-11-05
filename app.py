@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from ai_runtime import AiRuntimeError, analyze_with_ai
 
 ROOT = Path(__file__).parent
 STATIC = ROOT / "static"
@@ -74,7 +75,14 @@ class AgentOrchestrator:
     def analyze(self, payload: dict[str, Any]) -> dict[str, Any]:
         LOGGER.info("analysis started crop=%s", payload["crop"])
         risk = CropRiskAgent().run(payload)
-        result = ShipmentPlannerAgent().run(payload, risk)
+        if os.getenv("AI_RUNTIME", "demo").lower() == "live":
+            try:
+                result = analyze_with_ai(payload, risk)
+            except AiRuntimeError:
+                LOGGER.exception("live AI runtime failed")
+                raise
+        else:
+            result = ShipmentPlannerAgent().run(payload, risk)
         result["steps"] = [
             {"id": "validating", "label": "입력 검증", "status": "completed"},
             {"id": "crop-risk", "label": "작물 위험 분석", "status": "completed"},
